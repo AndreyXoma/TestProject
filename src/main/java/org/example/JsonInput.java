@@ -166,18 +166,28 @@ public class JsonInput {
     }
 
     private static void getDifferenceBetweenPriceAndMedian(List<Ticket> ticketList) {
-        List<Double> prices = new ArrayList<>();
-        ticketList.forEach(ticket1 -> prices.add((double) ticket1.getPrice()));
-        System.out.println("Разница между средней ценой и медианой: " + calculateMedian(prices));
+        System.out.println("Разница между средней ценой и медианой: " + calculateMedian(ticketList));
     }
 
-    private static double calculateMedian(List<Double> prices) {
-        Collections.sort(prices);
-        int middle = prices.size() / 2;
-        if (prices.size() % 2 == 0) {
-            return (prices.get(middle - 1) + prices.get(middle)) / 2;
-        } else {
-            return prices.get(middle);
+    private static double calculateMedian(List<Ticket> tickets) {
+        double sum = 0;
+        for(Ticket ticket : tickets) {
+            sum += ticket.getPrice();
         }
+        double mean = sum / tickets.size();
+
+        double[] prices = tickets.stream()
+                .mapToDouble(Ticket::getPrice)
+                .sorted()
+                .toArray();
+
+        double median;
+        if(prices.length % 2 == 0) {
+            median = (prices[prices.length/2 - 1] + prices[prices.length/2]) / 2;
+        } else {
+            median = prices[prices.length / 2];
+        }
+
+        return mean - median;
     }
 }
