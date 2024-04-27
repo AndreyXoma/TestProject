@@ -11,9 +11,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
 public class JsonInput {
     private static final String TAG_TICKETS = "tickets";
@@ -28,11 +26,7 @@ public class JsonInput {
     private static final String TAG_CARRIER = "carrier";
     private static final String TAG_STOPS = "stops";
     private static final String TAG_PRICE = "price";
-    private static long minSecondsS7 = 0;
-    private static long minSecondsSU = 0;
-    private static long minSecondsTK = 0;
-    private static long minSecondsBA = 0;
-
+    private static Map<String, Long> minFlightTimesMap = new HashMap<>();
 
     public static void parsing() {
         try {
@@ -93,76 +87,70 @@ public class JsonInput {
                         carrier,
                         (int) stops,
                         (int) price));
+                minFlightTimesMap.put(carrier, Long.MAX_VALUE);
             }
         }
     }
 
-    private static String getCorrectTime(String arrivalTime) {
-        if (arrivalTime.length() < 5) {
-            arrivalTime = "0" + arrivalTime;
+    private static String getCorrectTime(String time) {
+        if (time.length() < 5) {
+            time = "0" + time;
         }
-        return arrivalTime;
+        return time;
     }
 
     private static void getMinTimeCarrier(Ticket ticket) {
-        switch (ticket.getCarrier()) {
-            case "S7": {
-                long result = differenceBetween(ticket.getDepartureTime(), ticket.getArrivalTime());
-                minSecondsS7 = getMinFlightTime(minSecondsS7, result);
-                break;
-            }
-            case "SU": {
-                long result = differenceBetween(ticket.getDepartureTime(), ticket.getArrivalTime());
-                minSecondsSU = getMinFlightTime(minSecondsSU, result);
-                break;
-            }
-            case "TK": {
-                long result = differenceBetween(ticket.getDepartureTime(), ticket.getArrivalTime());
-                minSecondsTK = getMinFlightTime(minSecondsTK, result);
-                break;
-            }
-            case "BA": {
-                long result = differenceBetween(ticket.getDepartureTime(), ticket.getArrivalTime());
-                minSecondsBA = getMinFlightTime(minSecondsBA, result);
-                break;
-            }
-            default:
-                System.out.println("Непредвиденная ошибка");
+        long days = DateComparator.compareDates(ticket.getDepartureDate(), ticket.getArrivalDate());
+        long result = differenceBetween(ticket.getDepartureTime(), ticket.getArrivalTime(), days);
 
+        String carrier = ticket.getCarrier();
+        if (minFlightTimesMap.containsKey(carrier)) {
+            long currentMinFlightTime = minFlightTimesMap.get(carrier);
+            minFlightTimesMap.put(carrier, getMinFlightTime(currentMinFlightTime, result));
+        } else {
+            minFlightTimesMap.put(carrier, result);
         }
     }
 
-    public static long differenceBetween(LocalTime time1, LocalTime time2) {
+    public static long differenceBetween(LocalTime time1, LocalTime time2, long days) {
+        if (days > 0) {
+            long seconds = 86400 * days;
+            return seconds + time1.until(time2, ChronoUnit.SECONDS);
+        }
         return time1.until(time2, ChronoUnit.SECONDS);
     }
 
-    private static long getMinFlightTime(long minSecondsBA, long result) {
-        if (minSecondsBA == 0) {
-            minSecondsBA = result;
+    private static long getMinFlightTime(long minSeconds, long result) {
+        if (minSeconds == 0) {
+            minSeconds = result;
         } else {
-            if (minSecondsBA > result) {
-                minSecondsBA = result;
+            if (minSeconds > result) {
+                minSeconds = result;
             }
         }
-        return minSecondsBA;
+        return minSeconds;
     }
 
     private static void printMinTimeEveryoneCarrier() {
-        getMinFlightTime(minSecondsS7, "S7");
-        getMinFlightTime(minSecondsSU, "SU");
-        getMinFlightTime(minSecondsTK, "TK");
-        getMinFlightTime(minSecondsBA, "BA");
+        for (Map.Entry<String, Long> map : minFlightTimesMap.entrySet()) {
+            displaysMinTime(map.getValue(), map.getKey());
+        }
     }
 
-    private static void getMinFlightTime(long seconds, String carrier) {
+    private static void displaysMinTime(long seconds, String carrier) {
         System.out.println("Минимальное время для " + carrier + ": " + convertSecondsToHoursMinutes(seconds));
     }
 
     private static String convertSecondsToHoursMinutes(long totalSeconds) {
-        int hours = (int) (totalSeconds / 3600);
-        int minutes = (int) ((totalSeconds % 3600) / 60);
-        int seconds = (int) (totalSeconds % 60);
-        return String.format("%02d:%02d:%02d", hours, minutes, seconds);
+        int days = (int) (totalSeconds / (60 * 60 * 24));
+        int remainingSeconds = (int) (totalSeconds % (60 * 60 * 24));
+
+        int hours = remainingSeconds / 3600;
+        remainingSeconds %= 3600;
+
+        int minutes = remainingSeconds / 60;
+        remainingSeconds %= 60;
+        return String.format("%d дней %02d:%02d:%02d", days, hours, minutes, remainingSeconds);
     }
 
     private static void getDifferenceBetweenPriceAndMedian(List<Ticket> ticketList) {
@@ -171,7 +159,7 @@ public class JsonInput {
 
     private static double calculateMedian(List<Ticket> tickets) {
         double sum = 0;
-        for(Ticket ticket : tickets) {
+        for (Ticket ticket : tickets) {
             sum += ticket.getPrice();
         }
         double mean = sum / tickets.size();
@@ -182,8 +170,8 @@ public class JsonInput {
                 .toArray();
 
         double median;
-        if(prices.length % 2 == 0) {
-            median = (prices[prices.length/2 - 1] + prices[prices.length/2]) / 2;
+        if (prices.length % 2 == 0) {
+            median = (prices[prices.length / 2 - 1] + prices[prices.length / 2]) / 2;
         } else {
             median = prices[prices.length / 2];
         }
